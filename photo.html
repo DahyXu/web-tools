@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>证件照转换工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <!-- 配置Tailwind自定义主题 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36CFC9',
+                        neutral: '#F5F7FA',
+                        dark: '#1D2129',
+                        light: '#FFFFFF'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'card': '0 4px 20px rgba(0, 0, 0, 0.08)',
+                        'hover': '0 8px 30px rgba(0, 0, 0, 0.12)',
+                    }
+                },
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .transition-custom {
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            .backdrop-blur {
+                backdrop-filter: blur(8px);
+            }
+        }
+    </style>
+</head>
+<body class="font-inter bg-neutral min-h-screen text-dark">
+    <!-- 顶部导航 -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-id-card text-primary text-2xl"></i>
+                <h1 class="text-xl md:text-2xl font-bold text-primary">证件照转换工具</h1>
+            </div>
+            <div class="text-sm text-gray-500 hidden md:block">
+                轻松转换证件照尺寸与像素
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8 max-w-5xl">
+        <!-- 步骤指示器 -->
+        <div class="flex justify-between items-center mb-10 relative">
+            <div class="absolute top-1/2 left-0 right-0 h-1 bg-gray-200 -translate-y-1/2 z-0"></div>
+            <div class="absolute top-1/2 left-0 h-1 bg-primary -translate-y-1/2 z-10 transition-all duration-500" id="progress-bar" style="width: 25%"></div>
+            
+            <div class="flex flex-col items-center relative z-20">
+                <div class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center mb-2">
+                    <i class="fa fa-image"></i>
+                </div>
+                <span class="text-sm font-medium">选择照片</span>
+            </div>
+            
+            <div class="flex flex-col items-center relative z-20">
+                <div class="w-10 h-10 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mb-2 transition-custom" id="step-2-indicator">
+                    <i class="fa fa-sliders"></i>
+                </div>
+                <span class="text-sm font-medium text-gray-500 transition-custom" id="step-2-text">设置参数</span>
+            </div>
+            
+            <div class="flex flex-col items-center relative z-20">
+                <div class="w-10 h-10 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mb-2 transition-custom" id="step-3-indicator">
+                    <i class="fa fa-magic"></i>
+                </div>
+                <span class="text-sm font-medium text-gray-500 transition-custom" id="step-3-text">生成照片</span>
+            </div>
+            
+            <div class="flex flex-col items-center relative z-20">
+                <div class="w-10 h-10 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center mb-2 transition-custom" id="step-4-indicator">
+                    <i class="fa fa-download"></i>
+                </div>
+                <span class="text-sm font-medium text-gray-500 transition-custom" id="step-4-text">保存结果</span>
+            </div>
+        </div>
+
+        <!-- 照片选择与预览区域 -->
+        <section id="photo-selection" class="mb-10">
+            <div class="bg-white rounded-xl shadow-card p-6 transition-custom hover:shadow-hover">
+                <h2 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="fa fa-image text-primary mr-2"></i>选择或拍摄照片
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- 照片预览区域 -->
+                    <div class="relative border-2 border-dashed border-gray-300 rounded-lg p-4 h-64 flex items-center justify-center bg-neutral transition-custom hover:border-primary" id="preview-container">
+                        <div id="initial-preview" class="text-center">
+                            <i class="fa fa-camera text-5xl text-gray-400 mb-3"></i>
+                            <p class="text-gray-500">预览区域</p>
+                            <p class="text-xs text-gray-400 mt-1">上传照片或拍摄后显示</p>
+                        </div>
+                        <img id="photo-preview" class="max-w-full max-h-full object-contain hidden" alt="预览照片">
+                        <video id="camera-preview" class="max-w-full max-h-full object-contain hidden" autoplay playsinline></video>
+                    </div>
+                    
+                    <!-- 操作按钮 -->
+                    <div class="flex flex-col justify-center">
+                        <div class="space-y-4">
+                            <!-- 本地选择照片按钮 -->
+                            <div class="relative">
+                                <button type="button" id="upload-button" class="w-full bg-white border border-primary text-primary hover:bg-primary hover:text-white transition-custom py-3 px-4 rounded-lg font-medium flex items-center justify-center">
+                                    <i class="fa fa-upload mr-2"></i>从本地选择照片
+                                </button>
+                                <input type="file" id="file-upload" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                            </div>
+                            
+                            <button id="camera-button" type="button" class="w-full bg-white border border-secondary text-secondary hover:bg-secondary hover:text-white transition-custom py-3 px-4 rounded-lg font-medium flex items-center justify-center">
+                                <i class="fa fa-video-camera mr-2"></i>调用摄像头拍照
+                            </button>
+                            
+                            <button id="take-photo" type="button" class="w-full bg-secondary text-white hidden transition-custom py-3 px-4 rounded-lg font-medium flex items-center justify-center">
+                                <i class="fa fa-camera mr-2"></i>拍摄照片
+                            </button>
+                            
+                            <button id="cancel-camera" type="button" class="w-full bg-gray-200 text-gray-600 hidden transition-custom py-3 px-4 rounded-lg font-medium flex items-center justify-center">
+                                <i class="fa fa-times mr-2"></i>取消拍摄
+                            </button>
+                        </div>
+                        
+                        <div class="mt-4 text-sm text-gray-500">
+                            <p><i class="fa fa-info-circle mr-1"></i> 支持JPG、PNG等常见图片格式</p>
+                            <p class="mt-1"><i class="fa fa-info-circle mr-1"></i> 建议使用正面免冠证件照效果更佳</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 参数设置区域 -->
+        <section id="parameters" class="mb-10 opacity-50 pointer-events-none transition-custom">
+            <div class="bg-white rounded-xl shadow-card p-6 transition-custom hover:shadow-hover">
+                <h2 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="fa fa-sliders text-primary mr-2"></i>设置转换参数
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">尺寸 (毫米)</label>
+                            <div class="flex space-x-3">
+                                <div class="flex-1">
+                                    <label for="width" class="block text-xs text-gray-500 mb-1">宽度</label>
+                                    <input type="number" id="width" placeholder="例如: 25" step="0.1" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom">
+                                </div>
+                                <div class="flex items-center">
+                                    <span class="text-gray-500 text-xl">×</span>
+                                </div>
+                                <div class="flex-1">
+                                    <label for="height" class="block text-xs text-gray-500 mb-1">高度</label>
+                                    <input type="number" id="height" placeholder="例如: 35" step="0.1" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom">
+                                </div>
+                            </div>
+                            <p class="mt-1 text-xs text-gray-500">一寸照: 25×35 | 二寸照: 35×53 | 身份证: 26×32</p>
+                        </div>
+                        
+                        <div>
+                            <label for="ppi" class="block text-sm font-medium text-gray-700 mb-1">分辨率 (PPI)</label>
+                            <input type="number" id="ppi" value="300" min="72" max="600" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom">
+                            <p class="mt-1 text-xs text-gray-500">打印常用300PPI，屏幕显示常用72或96PPI</p>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label for="min-pixels" class="block text-sm font-medium text-gray-700 mb-1">最低像素</label>
+                            <input type="number" id="min-pixels" placeholder="例如: 200000" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom">
+                            <p class="mt-1 text-xs text-gray-500">生成的照片像素不低于此值</p>
+                        </div>
+                        
+                        <div>
+                            <label for="max-pixels" class="block text-sm font-medium text-gray-700 mb-1">最高像素</label>
+                            <input type="number" id="max-pixels" placeholder="例如: 2000000" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom">
+                            <p class="mt-1 text-xs text-gray-500">生成的照片像素不高于此值</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 常用尺寸快捷选择 -->
+                <div class="mt-4 pt-4 border-t border-gray-100">
+                    <p class="text-sm font-medium text-gray-700 mb-2">常用尺寸:</p>
+                    <div class="flex flex-wrap gap-2">
+                        <button class="size-preset px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded transition-custom" data-width="25" data-height="35">一寸照 (25×35)</button>
+                        <button class="size-preset px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded transition-custom" data-width="35" data-height="53">二寸照 (35×53)</button>
+                        <button class="size-preset px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded transition-custom" data-width="26" data-height="32">身份证 (26×32)</button>
+                        <button class="size-preset px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded transition-custom" data-width="41" data-height="59">护照 (41×59)</button>
+                        <button class="size-preset px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 rounded transition-custom" data-width="33" data-height="48">驾驶证 (33×48)</button>
+                    </div>
+                </div>
+                
+                <!-- 像素预览 -->
+                <div class="mt-4 p-3 bg-neutral rounded-lg">
+                    <p class="text-sm font-medium text-gray-700 mb-1">预估像素尺寸:</p>
+                    <p class="text-sm text-gray-600" id="pixel-estimate">请输入尺寸和分辨率后显示</p>
+                </div>
+                
+                <div class="mt-6">
+                    <button id="calculate-button" type="button" class="w-full bg-primary text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center transition-custom hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <i class="fa fa-calculator mr-2"></i>计算并生成证件照
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 结果展示区域 -->
+        <section id="result" class="mb-10 hidden">
+            <div class="bg-white rounded-xl shadow-card p-6 transition-custom hover:shadow-hover">
+                <h2 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="fa fa-check-circle text-primary mr-2"></i>转换结果
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- 原始照片 -->
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-700 mb-2">原始照片</h3>
+                        <div class="border border-gray-200 rounded-lg p-4 h-64 flex items-center justify-center bg-neutral">
+                            <img id="original-photo" class="max-w-full max-h-full object-contain" alt="原始照片">
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500" id="original-info">
+                            <!-- 原始照片信息将在这里显示 -->
+                        </div>
+                    </div>
+                    
+                    <!-- 处理后照片 -->
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-700 mb-2">处理后照片</h3>
+                        <div class="border border-gray-200 rounded-lg p-4 h-64 flex items-center justify-center bg-neutral">
+                            <img id="result-photo" class="max-w-full max-h-full object-contain" alt="处理后的照片">
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500" id="result-info">
+                            <!-- 处理后照片信息将在这里显示 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex flex-col sm:flex-row gap-4">
+                    <button id="download-button" type="button" class="flex-1 bg-primary text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center transition-custom hover:bg-primary/90">
+                        <i class="fa fa-download mr-2"></i>下载处理后的照片
+                    </button>
+                    <button id="restart-button" type="button" class="flex-1 bg-white border border-gray-300 text-gray-700 py-3 px-4 rounded-lg font-medium flex items-center justify-center transition-custom hover:bg-gray-50">
+                        <i class="fa fa-refresh mr-2"></i>重新开始
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 加载状态 -->
+        <div id="loading" class="fixed inset-0 bg-dark/50 backdrop-blur flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-xl p-8 max-w-md w-full text-center">
+                <div class="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <h3 class="text-lg font-semibold mb-2">正在处理照片</h3>
+                <p class="text-gray-500" id="loading-message">请稍候，正在根据您的设置生成证件照...</p>
+            </div>
+        </div>
+
+        <!-- 提示信息 -->
+        <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-dark text-white px-6 py-3 rounded-lg shadow-lg z-50 hidden transition-custom opacity-0">
+            <p id="toast-message"></p>
+        </div>
+    </main>
+
+    <footer class="bg-white border-t border-gray-200 py-6">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>证件照转换工具 &copy; 2023</p>
+            <p class="mt-1">本工具仅用于图片尺寸和像素转换，不保证完全符合所有官方要求</p>
+        </div>
+    </footer>
+
+    <script>
+        // DOM元素
+        const fileUpload = document.getElementById('file-upload');
+        const uploadButton = document.getElementById('upload-button');
+        const cameraButton = document.getElementById('camera-button');
+        const takePhotoButton = document.getElementById('take-photo');
+        const cancelCameraButton = document.getElementById('cancel-camera');
+        const photoPreview = document.getElementById('photo-preview');
+        const cameraPreview = document.getElementById('camera-preview');
+        const initialPreview = document.getElementById('initial-preview');
+        const calculateButton = document.getElementById('calculate-button');
+        const widthInput = document.getElementById('width');
+        const heightInput = document.getElementById('height');
+        const ppiInput = document.getElementById('ppi');
+        const minPixelsInput = document.getElementById('min-pixels');
+        const maxPixelsInput = document.getElementById('max-pixels');
+        const parametersSection = document.getElementById('parameters');
+        const resultSection = document.getElementById('result');
+        const originalPhoto = document.getElementById('original-photo');
+        const resultPhoto = document.getElementById('result-photo');
+        const originalInfo = document.getElementById('original-info');
+        const resultInfo = document.getElementById('result-info');
+        const downloadButton = document.getElementById('download-button');
+        const restartButton = document.getElementById('restart-button');
+        const loading = document.getElementById('loading');
+        const loadingMessage = document.getElementById('loading-message');
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toast-message');
+        const sizePresets = document.querySelectorAll('.size-preset');
+        const pixelEstimate = document.getElementById('pixel-estimate');
+        
+        // 步骤指示器元素
+        const progressBar = document.getElementById('progress-bar');
+        const step2Indicator = document.getElementById('step-2-indicator');
+        const step2Text = document.getElementById('step-2-text');
+        const step3Indicator = document.getElementById('step-3-indicator');
+        const step3Text = document.getElementById('step-3-text');
+        const step4Indicator = document.getElementById('step-4-indicator');
+        const step4Text = document.getElementById('step-4-text');
+        
+        // 全局变量
+        let stream = null;
+        let originalImageData = null;
+        
+        // 显示提示信息
+        function showToast(message, duration = 3000) {
+            toastMessage.textContent = message;
+            toast.classList.remove('hidden', 'opacity-0');
+            toast.classList.add('opacity-100');
+            
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0');
+                setTimeout(() => {
+                    toast.classList.add('hidden');
+                }, 300);
+            }, duration);
+        }
+        
+        // 显示加载状态
+        function showLoading(message = '处理中...') {
+            loadingMessage.textContent = message;
+            loading.classList.remove('hidden');
+        }
+        
+        // 隐藏加载状态
+        function hideLoading() {
+            loading.classList.add('hidden');
+        }
+        
+        // 更新步骤指示器
+        function updateStep(step) {
+            // 重置所有步骤
+            [step2Indicator, step3Indicator, step4Indicator].forEach(el => {
+                el.classList.remove('bg-primary', 'text-white');
+                el.classList.add('bg-gray-200', 'text-gray-500');
+            });
+            
+            [step2Text, step3Text, step4Text].forEach(el => {
+                el.classList.remove('text-dark');
+                el.classList.add('text-gray-500');
+            });
+            
+            // 更新进度条
+            let progressWidth = '25%';
+            if (step >= 2) progressWidth = '50%';
+            if (step >= 3) progressWidth = '75%';
+            if (step >= 4) progressWidth = '100%';
+            progressBar.style.width = progressWidth;
+            
+            // 更新当前步骤
+            if (step >= 2) {
+                step2Indicator.classList.remove('bg-gray-200', 'text-gray-500');
+                step2Indicator.classList.add('bg-primary', 'text-white');
+                step2Text.classList.remove('text-gray-500');
+                step2Text.classList.add('text-dark');
+            }
+            
+            if (step >= 3) {
+                step3Indicator.classList.remove('bg-gray-200', 'text-gray-500');
+                step3Indicator.classList.add('bg-primary', 'text-white');
+                step3Text.classList.remove('text-gray-500');
+                step3Text.classList.add('text-dark');
+            }
+            
+            if (step >= 4) {
+                step4Indicator.classList.remove('bg-gray-200', 'text-gray-500');
+                step4Indicator.classList.add('bg-primary', 'text-white');
+                step4Text.classList.remove('text-gray-500');
+                step4Text.classList.add('text-dark');
+            }
+        }
+        
+        // 计算预估像素尺寸并显示
+        function updatePixelEstimate() {
+            const width = parseFloat(widthInput.value);
+            const height = parseFloat(heightInput.value);
+            const ppi = parseInt(ppiInput.value);
+            
+            if (!isNaN(width) && !isNaN(height) && !isNaN(ppi) && width > 0 && height > 0 && ppi >= 72) {
+                // 精确计算：毫米 -> 英寸 -> 像素
+                // 1英寸 = 25.4毫米
+                const widthPixels = Math.round((width / 25.4) * ppi);
+                const heightPixels = Math.round((height / 25.4) * ppi);
+                const totalPixels = widthPixels * heightPixels;
+                
+                pixelEstimate.textContent = 
+                    `宽度: ${widthPixels}px, 高度: ${heightPixels}px, 总像素: ${totalPixels.toLocaleString()}`;
+            } else {
+                pixelEstimate.textContent = "请输入有效的尺寸和分辨率后显示";
+            }
+        }
+        
+        // 点击上传按钮时触发文件选择
+        uploadButton.addEventListener('click', () => {
+            fileUpload.click();
+        });
+        
+        // 处理照片选择
+        fileUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (!file.type.startsWith('image/')) {
+                showToast('请选择图片文件');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                // 隐藏初始预览和摄像头预览，显示照片预览
+                initialPreview.classList.add('hidden');
+                cameraPreview.classList.add('hidden');
+                photoPreview.classList.remove('hidden');
+                
+                // 显示预览
+                photoPreview.src = event.target.result;
+                originalImageData = event.target.result;
+                
+                // 启用参数设置区域
+                parametersSection.classList.remove('opacity-50', 'pointer-events-none');
+                calculateButton.disabled = false;
+                
+                // 更新步骤
+                updateStep(2);
+                
+                showToast('照片已加载');
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        // 处理摄像头调用
+        cameraButton.addEventListener('click', async () => {
+            try {
+                // 获取摄像头流
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'user', // 使用前置摄像头
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                
+                // 隐藏初始预览和照片预览，显示摄像头预览
+                initialPreview.classList.add('hidden');
+                photoPreview.classList.add('hidden');
+                cameraPreview.classList.remove('hidden');
+                
+                // 设置视频源
+                cameraPreview.srcObject = stream;
+                
+                // 切换按钮状态
+                cameraButton.classList.add('hidden');
+                takePhotoButton.classList.remove('hidden');
+                cancelCameraButton.classList.remove('hidden');
+                
+                showToast('摄像头已启动');
+            } catch (error) {
+                console.error('无法访问摄像头:', error);
+                showToast('无法访问摄像头，请确保已授予权限');
+            }
+        });
+        
+        // 取消摄像头
+        cancelCameraButton.addEventListener('click', () => {
+            // 停止流
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            // 重置预览
+            cameraPreview.classList.add('hidden');
+            initialPreview.classList.remove('hidden');
+            
+            // 切换按钮状态
+            cameraButton.classList.remove('hidden');
+            takePhotoButton.classList.add('hidden');
+            cancelCameraButton.classList.add('hidden');
+            
+            showToast('已取消拍摄');
+        });
+        
+        // 拍摄照片
+        takePhotoButton.addEventListener('click', () => {
+            // 创建canvas用于捕获视频帧
+            const canvas = document.createElement('canvas');
+            canvas.width = cameraPreview.videoWidth;
+            canvas.height = cameraPreview.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(cameraPreview, 0, 0, canvas.width, canvas.height);
+            
+            // 获取图像数据
+            const imageData = canvas.toDataURL('image/jpeg');
+            originalImageData = imageData;
+            
+            // 显示拍摄的照片
+            cameraPreview.classList.add('hidden');
+            photoPreview.classList.remove('hidden');
+            photoPreview.src = imageData;
+            
+            // 停止流
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            // 切换按钮状态
+            cameraButton.classList.remove('hidden');
+            takePhotoButton.classList.add('hidden');
+            cancelCameraButton.classList.add('hidden');
+            
+            // 启用参数设置区域
+            parametersSection.classList.remove('opacity-50', 'pointer-events-none');
+            calculateButton.disabled = false;
+            
+            // 更新步骤
+            updateStep(2);
+            
+            showToast('照片已拍摄');
+        });
+        
+        // 常用尺寸快捷选择
+        sizePresets.forEach(preset => {
+            preset.addEventListener('click', () => {
+                const width = preset.getAttribute('data-width');
+                const height = preset.getAttribute('data-height');
+                widthInput.value = width;
+                heightInput.value = height;
+                updatePixelEstimate(); // 更新预估像素
+            });
+        });
+        
+        // 当尺寸或分辨率变化时更新预估像素
+        widthInput.addEventListener('input', updatePixelEstimate);
+        heightInput.addEventListener('input', updatePixelEstimate);
+        ppiInput.addEventListener('input', updatePixelEstimate);
+        
+        // 计算并生成证件照
+        calculateButton.addEventListener('click', async () => {
+            // 验证输入
+            const width = parseFloat(widthInput.value);
+            const height = parseFloat(heightInput.value);
+            const ppi = parseInt(ppiInput.value);
+            const minPixels = minPixelsInput.value.trim() ? parseInt(minPixelsInput.value) : null;
+            const maxPixels = maxPixelsInput.value.trim() ? parseInt(maxPixelsInput.value) : null;
+            
+            // 验证尺寸
+            if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
+                showToast('请输入有效的宽度和高度值');
+                return;
+            }
+            
+            // 验证PPI
+            if (isNaN(ppi) || ppi < 72 || ppi > 600) {
+                showToast('请输入72-600之间的PPI值');
+                ppiInput.focus();
+                return;
+            }
+            
+            // 验证像素范围
+            if (minPixels !== null && maxPixels !== null && minPixels >= maxPixels) {
+                showToast('最低像素不能大于最高像素');
+                return;
+            }
+            
+            // 显示加载状态
+            showLoading('正在生成证件照...');
+            
+            try {
+                // 精确的单位换算：毫米 -> 英寸 -> 像素
+                // 1英寸 = 25.4毫米
+                const widthInches = width / 25.4;    // 毫米转英寸
+                const heightInches = height / 25.4;  // 毫米转英寸
+                
+                // 根据PPI计算像素尺寸（四舍五入到最接近的整数）
+                let targetWidth = Math.round(widthInches * ppi);
+                let targetHeight = Math.round(heightInches * ppi);
+                
+                // 计算当前像素总数
+                let totalPixels = targetWidth * targetHeight;
+                
+                // 应用像素限制
+                if (minPixels !== null && totalPixels < minPixels) {
+                    // 按比例放大到最低像素
+                    const scale = Math.sqrt(minPixels / totalPixels);
+                    targetWidth = Math.round(targetWidth * scale);
+                    targetHeight = Math.round(targetHeight * scale);
+                    totalPixels = targetWidth * targetHeight;
+                }
+                
+                if (maxPixels !== null && totalPixels > maxPixels) {
+                    // 按比例缩小到最高像素
+                    const scale = Math.sqrt(maxPixels / totalPixels);
+                    targetWidth = Math.round(targetWidth * scale);
+                    targetHeight = Math.round(targetHeight * scale);
+                    totalPixels = targetWidth * targetHeight;
+                }
+                
+                // 处理图像
+                const resultDataUrl = await resizeImage(originalImageData, targetWidth, targetHeight);
+                
+                // 显示结果
+                originalPhoto.src = originalImageData;
+                resultPhoto.src = resultDataUrl;
+                
+                // 获取原始图像信息
+                const originalImg = new Image();
+                originalImg.src = originalImageData;
+                
+                await new Promise(resolve => {
+                    originalImg.onload = resolve;
+                });
+                
+                // 显示图像信息
+                originalInfo.innerHTML = `
+                    尺寸: ${originalImg.width} × ${originalImg.height} 像素<br>
+                    比例: ${(originalImg.width / originalImg.height).toFixed(2)}<br>
+                    像素总数: ${(originalImg.width * originalImg.height).toLocaleString()}
+                `;
+                
+                resultInfo.innerHTML = `
+                    尺寸: ${targetWidth} × ${targetHeight} 像素<br>
+                    比例: ${(targetWidth / targetHeight).toFixed(2)}<br>
+                    像素总数: ${totalPixels.toLocaleString()}<br>
+                    物理尺寸: ${width}×${height}毫米 (${ppi} PPI)<br>
+                    换算验证: 1像素 = ${(width / targetWidth).toFixed(4)}毫米
+                `;
+                
+                // 显示结果区域
+                resultSection.classList.remove('hidden');
+                
+                // 更新步骤
+                updateStep(4);
+                
+                showToast('证件照生成成功');
+            } catch (error) {
+                console.error('处理图像时出错:', error);
+                showToast('处理图像时出错，请重试');
+            } finally {
+                // 隐藏加载状态
+                hideLoading();
+            }
+        });
+        
+        // 调整图像大小
+        function resizeImage(imageDataUrl, targetWidth, targetHeight) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.src = imageDataUrl;
+                
+                img.onload = () => {
+                    // 创建canvas
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // 设置目标尺寸
+                    canvas.width = targetWidth;
+                    canvas.height = targetHeight;
+                    
+                    // 计算缩放比例
+                    const scaleX = targetWidth / img.width;
+                    const scaleY = targetHeight / img.height;
+                    const scale = Math.max(scaleX, scaleY); // 确保填满目标尺寸
+                    
+                    // 计算绘制位置（居中裁剪）
+                    const drawWidth = img.width * scale;
+                    const drawHeight = img.height * scale;
+                    const offsetX = (targetWidth - drawWidth) / 2;
+                    const offsetY = (targetHeight - drawHeight) / 2;
+                    
+                    // 绘制图像
+                    ctx.drawImage(
+                        img,
+                        offsetX, offsetY,
+                        drawWidth, drawHeight
+                    );
+                    
+                    // 获取结果
+                    resolve(canvas.toDataURL('image/jpeg', 0.95));
+                };
+                
+                img.onerror = reject;
+            });
+        }
+        
+        // 下载处理后的照片
+        downloadButton.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.href = resultPhoto.src;
+            
+            // 生成文件名
+            const width = widthInput.value.trim();
+            const height = heightInput.value.trim();
+            const ppi = ppiInput.value;
+            const timestamp = new Date().getTime();
+            link.download = `证件照_${width}×${height}mm_${ppi}ppi_${timestamp}.jpg`;
+            
+            // 触发下载
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showToast('照片已下载');
+        });
+        
+        // 重新开始
+        restartButton.addEventListener('click', () => {
+            // 重置预览
+            photoPreview.classList.add('hidden');
+            cameraPreview.classList.add('hidden');
+            initialPreview.classList.remove('hidden');
+            
+            // 重置文件输入
+            fileUpload.value = '';
+            
+            // 重置按钮状态
+            cameraButton.classList.remove('hidden');
+            takePhotoButton.classList.add('hidden');
+            cancelCameraButton.classList.add('hidden');
+            
+            // 重置参数
+            widthInput.value = '';
+            heightInput.value = '';
+            ppiInput.value = '300';
+            minPixelsInput.value = '';
+            maxPixelsInput.value = '';
+            
+            // 隐藏结果区域
+            resultSection.classList.add('hidden');
+            
+            // 禁用参数设置区域
+            parametersSection.classList.add('opacity-50', 'pointer-events-none');
+            calculateButton.disabled = true;
+            
+            // 重置像素预估
+            updatePixelEstimate();
+            
+            // 重置步骤
+            updateStep(1);
+            
+            // 停止可能的流
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            showToast('已重置，请重新开始');
+        });
+        
+        // 初始化页面
+        updateStep(1);
+        updatePixelEstimate();
+    </script>
+</body>
+</html>
