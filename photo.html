@@ -260,6 +260,9 @@
                     <button id="download-button" type="button" class="flex-1 bg-primary text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center transition-custom hover:bg-primary/90">
                         <i class="fa fa-download mr-2"></i>下载处理后的照片
                     </button>
+                    <button id="share-button" type="button" class="flex-1 bg-secondary text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center transition-custom hover:bg-secondary/90">
+                        <i class="fa fa-share mr-2"></i>分享照片
+                    </button>
                     <button id="restart-button" type="button" class="flex-1 bg-white border border-gray-300 text-gray-700 py-3 px-4 rounded-lg font-medium flex items-center justify-center transition-custom hover:bg-gray-50">
                         <i class="fa fa-refresh mr-2"></i>重新开始
                     </button>
@@ -315,6 +318,7 @@
         const originalInfo = document.getElementById('original-info');
         const resultInfo = document.getElementById('result-info');
         const downloadButton = document.getElementById('download-button');
+        const shareButton = document.getElementById('share-button');
         const restartButton = document.getElementById('restart-button');
         const loading = document.getElementById('loading');
         const loadingMessage = document.getElementById('loading-message');
@@ -809,22 +813,140 @@
         
         // 下载处理后的照片
         downloadButton.addEventListener('click', () => {
-            const link = document.createElement('a');
-            link.href = resultPhoto.src;
-            
             // 生成文件名
             const width = widthInput.value.trim();
             const height = heightInput.value.trim();
             const ppi = ppiInput.value;
             const timestamp = new Date().getTime();
-            link.download = `证件照_${width}×${height}mm_${ppi}ppi_${timestamp}.jpg`;
+            const filename = `证件照_${width}×${height}${currentSizeUnit === 'mm' ? 'mm' : 'px'}_${ppi}ppi_${timestamp}.jpg`;
             
-            // 触发下载
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            // 检测浏览器类型
+            const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+            const isUC = /UCBrowser/i.test(navigator.userAgent);
+            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
-            showToast('照片已下载');
+            // 移动端浏览器通常不支持直接下载，需要显示图片让用户手动保存
+            if (isWeChat || isUC || isMobile) {
+                let browserName = '移动端浏览器';
+                if (isWeChat) browserName = '微信浏览器';
+                else if (isUC) browserName = 'UC浏览器';
+                
+                showToast(`在${browserName}中，请长按图片选择"保存图片"`);
+                
+                // 创建全屏图片预览
+                const overlay = document.createElement('div');
+                overlay.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50';
+                overlay.innerHTML = `
+                    <div class="relative max-w-full max-h-full p-4">
+                        <img src="${resultPhoto.src}" alt="证件照" class="max-w-full max-h-full object-contain">
+                        <button class="absolute top-2 right-2 w-8 h-8 bg-white/20 text-white rounded-full flex items-center justify-center" onclick="this.parentElement.parentElement.remove()">
+                            <i class="fa fa-times"></i>
+                        </button>
+                        <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 text-white px-4 py-2 rounded text-sm">
+                            长按图片选择"保存图片"
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+                
+                // 点击背景关闭
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) {
+                        overlay.remove();
+                    }
+                });
+            } else {
+                // PC浏览器：使用标准下载方式
+                try {
+                    const link = document.createElement('a');
+                    link.href = resultPhoto.src;
+                    link.download = filename;
+                    
+                    // 触发下载
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    showToast('照片已下载');
+                } catch (error) {
+                    console.error('下载失败:', error);
+                    showToast('下载失败，请尝试右键另存为');
+                    
+                    // 如果下载失败，也显示图片预览
+                    const overlay = document.createElement('div');
+                    overlay.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50';
+                    overlay.innerHTML = `
+                        <div class="relative max-w-full max-h-full p-4">
+                            <img src="${resultPhoto.src}" alt="证件照" class="max-w-full max-h-full object-contain">
+                            <button class="absolute top-2 right-2 w-8 h-8 bg-white/20 text-white rounded-full flex items-center justify-center" onclick="this.parentElement.parentElement.remove()">
+                                <i class="fa fa-times"></i>
+                            </button>
+                            <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 text-white px-4 py-2 rounded text-sm">
+                                右键图片选择"图片另存为"
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(overlay);
+                    
+                    overlay.addEventListener('click', (e) => {
+                        if (e.target === overlay) {
+                            overlay.remove();
+                        }
+                    });
+                }
+            }
+        });
+        
+        // 分享照片
+        shareButton.addEventListener('click', () => {
+            // 检测浏览器类型
+            const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+            const isUC = /UCBrowser/i.test(navigator.userAgent);
+            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            
+            if (isWeChat || isUC || isMobile) {
+                let browserName = '移动端浏览器';
+                if (isWeChat) browserName = '微信浏览器';
+                else if (isUC) browserName = 'UC浏览器';
+                
+                showToast(`在${browserName}中，请长按图片选择"发送给朋友"或"分享到朋友圈"`);
+                
+                // 创建全屏图片预览
+                const overlay = document.createElement('div');
+                overlay.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50';
+                overlay.innerHTML = `
+                    <div class="relative max-w-full max-h-full p-4">
+                        <img src="${resultPhoto.src}" alt="证件照" class="max-w-full max-h-full object-contain">
+                        <button class="absolute top-2 right-2 w-8 h-8 bg-white/20 text-white rounded-full flex items-center justify-center" onclick="this.parentElement.parentElement.remove()">
+                            <i class="fa fa-times"></i>
+                        </button>
+                        <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 text-white px-4 py-2 rounded text-sm">
+                            长按图片选择"发送给朋友"或"分享到朋友圈"
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+                
+                // 点击背景关闭
+                overlay.addEventListener('click', (e) => {
+                    if (e.target === overlay) {
+                        overlay.remove();
+                    }
+                });
+            } else {
+                // PC浏览器：尝试使用Web Share API
+                if (navigator.share) {
+                    navigator.share({
+                        title: '证件照',
+                        text: '使用证件照转换工具生成的证件照',
+                        url: window.location.href
+                    }).catch(() => {
+                        showToast('分享功能不可用，请手动保存图片');
+                    });
+                } else {
+                    showToast('请手动保存图片后分享');
+                }
+            }
         });
         
         // 重新开始
