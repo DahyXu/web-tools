@@ -156,7 +156,11 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">尺寸 (毫米)</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">尺寸</label>
+                            <div class="flex space-x-2 mb-2">
+                                <button type="button" id="size-unit-mm" class="px-3 py-1 text-sm bg-primary text-white rounded transition-custom">毫米</button>
+                                <button type="button" id="size-unit-px" class="px-3 py-1 text-sm bg-gray-200 text-gray-600 rounded transition-custom">像素</button>
+                            </div>
                             <div class="flex space-x-3">
                                 <div class="flex-1">
                                     <label for="width" class="block text-xs text-gray-500 mb-1">宽度</label>
@@ -170,7 +174,7 @@
                                     <input type="number" id="height" placeholder="例如: 35" step="0.1" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom">
                                 </div>
                             </div>
-                            <p class="mt-1 text-xs text-gray-500">一寸照: 25×35 | 二寸照: 35×53 | 身份证: 26×32</p>
+                            <p class="mt-1 text-xs text-gray-500" id="size-hint">一寸照: 25×35 | 二寸照: 35×53 | 身份证: 26×32</p>
                         </div>
                         
                         <div>
@@ -182,14 +186,14 @@
                     
                     <div class="space-y-4">
                         <div>
-                            <label for="min-pixels" class="block text-sm font-medium text-gray-700 mb-1">最低像素</label>
-                            <input type="number" id="min-pixels" placeholder="例如: 200000" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom">
+                            <label for="min-pixels" class="block text-sm font-medium text-gray-700 mb-1">最低像素限制</label>
+                            <input type="number" id="min-pixels" value="150" placeholder="例如: 200000" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom">
                             <p class="mt-1 text-xs text-gray-500">生成的照片像素不低于此值</p>
                         </div>
                         
                         <div>
-                            <label for="max-pixels" class="block text-sm font-medium text-gray-700 mb-1">最高像素</label>
-                            <input type="number" id="max-pixels" placeholder="例如: 2000000" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom">
+                            <label for="max-pixels" class="block text-sm font-medium text-gray-700 mb-1">最高像素限制</label>
+                            <input type="number" id="max-pixels" value="50000" placeholder="例如: 2000000" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-custom">
                             <p class="mt-1 text-xs text-gray-500">生成的照片像素不高于此值</p>
                         </div>
                     </div>
@@ -301,6 +305,9 @@
         const ppiInput = document.getElementById('ppi');
         const minPixelsInput = document.getElementById('min-pixels');
         const maxPixelsInput = document.getElementById('max-pixels');
+        const sizeUnitMm = document.getElementById('size-unit-mm');
+        const sizeUnitPx = document.getElementById('size-unit-px');
+        const sizeHint = document.getElementById('size-hint');
         const parametersSection = document.getElementById('parameters');
         const resultSection = document.getElementById('result');
         const originalPhoto = document.getElementById('original-photo');
@@ -328,6 +335,7 @@
         // 全局变量
         let stream = null;
         let originalImageData = null;
+        let currentSizeUnit = 'mm'; // 当前尺寸单位：'mm' 或 'px'
         
         // 显示提示信息
         function showToast(message, duration = 3000) {
@@ -404,17 +412,51 @@
             const height = parseFloat(heightInput.value);
             const ppi = parseInt(ppiInput.value);
             
-            if (!isNaN(width) && !isNaN(height) && !isNaN(ppi) && width > 0 && height > 0 && ppi >= 72) {
-                // 精确计算：毫米 -> 英寸 -> 像素
-                // 1英寸 = 25.4毫米
-                const widthPixels = Math.round((width / 25.4) * ppi);
-                const heightPixels = Math.round((height / 25.4) * ppi);
-                const totalPixels = widthPixels * heightPixels;
+            if (!isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
+                let widthPixels, heightPixels, totalPixels;
+                
+                if (currentSizeUnit === 'mm') {
+                    // 毫米单位：需要PPI进行转换
+                    if (!isNaN(ppi) && ppi >= 72) {
+                        // 精确计算：毫米 -> 英寸 -> 像素
+                        // 1英寸 = 25.4毫米
+                        widthPixels = Math.round((width / 25.4) * ppi);
+                        heightPixels = Math.round((height / 25.4) * ppi);
+                        totalPixels = widthPixels * heightPixels;
+                    } else {
+                        pixelEstimate.textContent = "毫米单位需要设置有效的PPI值";
+                        return;
+                    }
+                } else {
+                    // 像素单位：直接使用输入值
+                    widthPixels = Math.round(width);
+                    heightPixels = Math.round(height);
+                    totalPixels = widthPixels * heightPixels;
+                }
+                
+                // 计算像素限制信息
+                let limitInfo = '';
+                if (minPixelsInput.value.trim() || maxPixelsInput.value.trim()) {
+                    limitInfo = '\n像素限制: ';
+                    const limits = [];
+                    
+                    if (minPixelsInput.value.trim()) {
+                        const minValue = parseFloat(minPixelsInput.value);
+                        limits.push(`最低 ${minValue}px`);
+                    }
+                    
+                    if (maxPixelsInput.value.trim()) {
+                        const maxValue = parseFloat(maxPixelsInput.value);
+                        limits.push(`最高 ${maxValue}px`);
+                    }
+                    
+                    limitInfo += limits.join(', ');
+                }
                 
                 pixelEstimate.textContent = 
-                    `宽度: ${widthPixels}px, 高度: ${heightPixels}px, 总像素: ${totalPixels.toLocaleString()}`;
+                    `宽度: ${widthPixels}px, 高度: ${heightPixels}px, 总像素: ${totalPixels.toLocaleString()}${limitInfo}`;
             } else {
-                pixelEstimate.textContent = "请输入有效的尺寸和分辨率后显示";
+                pixelEstimate.textContent = "请输入有效的尺寸后显示";
             }
         }
         
@@ -547,6 +589,27 @@
             showToast('照片已拍摄');
         });
         
+        // 尺寸单位切换
+        sizeUnitMm.addEventListener('click', () => {
+            currentSizeUnit = 'mm';
+            sizeUnitMm.classList.remove('bg-gray-200', 'text-gray-600');
+            sizeUnitMm.classList.add('bg-primary', 'text-white');
+            sizeUnitPx.classList.remove('bg-primary', 'text-white');
+            sizeUnitPx.classList.add('bg-gray-200', 'text-gray-600');
+            sizeHint.textContent = '一寸照: 25×35 | 二寸照: 35×53 | 身份证: 26×32';
+            updatePixelEstimate();
+        });
+        
+        sizeUnitPx.addEventListener('click', () => {
+            currentSizeUnit = 'px';
+            sizeUnitPx.classList.remove('bg-gray-200', 'text-gray-600');
+            sizeUnitPx.classList.add('bg-primary', 'text-white');
+            sizeUnitMm.classList.remove('bg-primary', 'text-white');
+            sizeUnitMm.classList.add('bg-gray-200', 'text-gray-600');
+            sizeHint.textContent = '常用像素尺寸: 295×413 | 413×626 | 307×378';
+            updatePixelEstimate();
+        });
+        
         // 常用尺寸快捷选择
         sizePresets.forEach(preset => {
             preset.addEventListener('click', () => {
@@ -554,6 +617,15 @@
                 const height = preset.getAttribute('data-height');
                 widthInput.value = width;
                 heightInput.value = height;
+                
+                // 自动切换到毫米单位（因为常用尺寸都是以毫米为单位的）
+                currentSizeUnit = 'mm';
+                sizeUnitMm.classList.remove('bg-gray-200', 'text-gray-600');
+                sizeUnitMm.classList.add('bg-primary', 'text-white');
+                sizeUnitPx.classList.remove('bg-primary', 'text-white');
+                sizeUnitPx.classList.add('bg-gray-200', 'text-gray-600');
+                sizeHint.textContent = '一寸照: 25×35 | 二寸照: 35×53 | 身份证: 26×32';
+                
                 updatePixelEstimate(); // 更新预估像素
             });
         });
@@ -569,8 +641,18 @@
             const width = parseFloat(widthInput.value);
             const height = parseFloat(heightInput.value);
             const ppi = parseInt(ppiInput.value);
-            const minPixels = minPixelsInput.value.trim() ? parseInt(minPixelsInput.value) : null;
-            const maxPixels = maxPixelsInput.value.trim() ? parseInt(maxPixelsInput.value) : null;
+            
+            // 处理最小像素限制
+            let minPixels = null;
+            if (minPixelsInput.value.trim()) {
+                minPixels = Math.round(parseFloat(minPixelsInput.value));
+            }
+            
+            // 处理最大像素限制
+            let maxPixels = null;
+            if (maxPixelsInput.value.trim()) {
+                maxPixels = Math.round(parseFloat(maxPixelsInput.value));
+            }
             
             // 验证尺寸
             if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
@@ -595,14 +677,22 @@
             showLoading('正在生成证件照...');
             
             try {
-                // 精确的单位换算：毫米 -> 英寸 -> 像素
-                // 1英寸 = 25.4毫米
-                const widthInches = width / 25.4;    // 毫米转英寸
-                const heightInches = height / 25.4;  // 毫米转英寸
+                let targetWidth, targetHeight;
                 
-                // 根据PPI计算像素尺寸（四舍五入到最接近的整数）
-                let targetWidth = Math.round(widthInches * ppi);
-                let targetHeight = Math.round(heightInches * ppi);
+                if (currentSizeUnit === 'mm') {
+                    // 毫米单位：毫米 -> 英寸 -> 像素
+                    // 1英寸 = 25.4毫米
+                    const widthInches = width / 25.4;    // 毫米转英寸
+                    const heightInches = height / 25.4;  // 毫米转英寸
+                    
+                    // 根据PPI计算像素尺寸（四舍五入到最接近的整数）
+                    targetWidth = Math.round(widthInches * ppi);
+                    targetHeight = Math.round(heightInches * ppi);
+                } else {
+                    // 像素单位：直接使用输入的像素值
+                    targetWidth = Math.round(width);
+                    targetHeight = Math.round(height);
+                }
                 
                 // 计算当前像素总数
                 let totalPixels = targetWidth * targetHeight;
@@ -646,13 +736,19 @@
                     像素总数: ${(originalImg.width * originalImg.height).toLocaleString()}
                 `;
                 
-                resultInfo.innerHTML = `
+                let resultInfoText = `
                     尺寸: ${targetWidth} × ${targetHeight} 像素<br>
                     比例: ${(targetWidth / targetHeight).toFixed(2)}<br>
-                    像素总数: ${totalPixels.toLocaleString()}<br>
-                    物理尺寸: ${width}×${height}毫米 (${ppi} PPI)<br>
-                    换算验证: 1像素 = ${(width / targetWidth).toFixed(4)}毫米
+                    像素总数: ${totalPixels.toLocaleString()}
                 `;
+                
+                if (currentSizeUnit === 'mm') {
+                    resultInfoText += `<br>物理尺寸: ${width}×${height}毫米 (${ppi} PPI)<br>换算验证: 1像素 = ${(width / targetWidth).toFixed(4)}毫米`;
+                } else {
+                    resultInfoText += `<br>像素尺寸: ${width}×${height}像素`;
+                }
+                
+                resultInfo.innerHTML = resultInfoText;
                 
                 // 显示结果区域
                 resultSection.classList.remove('hidden');
@@ -750,8 +846,16 @@
             widthInput.value = '';
             heightInput.value = '';
             ppiInput.value = '300';
-            minPixelsInput.value = '';
-            maxPixelsInput.value = '';
+            minPixelsInput.value = '150';
+            maxPixelsInput.value = '50000';
+            
+            // 重置尺寸单位
+            currentSizeUnit = 'mm';
+            sizeUnitMm.classList.remove('bg-gray-200', 'text-gray-600');
+            sizeUnitMm.classList.add('bg-primary', 'text-white');
+            sizeUnitPx.classList.remove('bg-primary', 'text-white');
+            sizeUnitPx.classList.add('bg-gray-200', 'text-gray-600');
+            sizeHint.textContent = '一寸照: 25×35 | 二寸照: 35×53 | 身份证: 26×32';
             
             // 隐藏结果区域
             resultSection.classList.add('hidden');
